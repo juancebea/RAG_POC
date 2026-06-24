@@ -1,27 +1,37 @@
-"""Application configuration.
+from functools import lru_cache
 
-All values are centralized here so the app, tests, and evaluation scripts use
-one consistent configuration surface.
-"""
-
-from dataclasses import dataclass
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-@dataclass(frozen=True)
-class Settings:
-    openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
-    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    openai_embedding_model: str = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-    chroma_collection_name: str = os.getenv("CHROMA_COLLECTION_NAME", "shafu_knowledge_base")
-    chroma_persist_dir: str = os.getenv("CHROMA_PERSIST_DIR", "chroma_db")
-    docs_dir: str = os.getenv("DOCS_DIR", "docs")
-    rag_top_k: int = int(os.getenv("RAG_TOP_K", "3"))
-    chunk_size: int = int(os.getenv("CHUNK_SIZE", "500"))
-    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "100"))
+class Settings(BaseSettings):
+    """Application configuration loaded from .env."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    docs_directory: str = "docs"
+    chroma_persist_directory: str = "chroma_db"
+
+    chunk_size: int = 500
+    chunk_overlap: int = 100
+
+    embedding_provider: str = "local"
+    local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+
+    llm_provider: str = "retrieval_only"
+    ollama_model: str = "llama3.2:3b"
+
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-4o-mini"
+    openai_embedding_model: str = "text-embedding-3-small"
 
 
-settings = Settings()
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

@@ -9,7 +9,7 @@ from src.vector_store import build_vector_store
 
 
 def load_markdown_documents(docs_dir: str | None = None) -> list[Document]:
-    base_dir = Path(docs_dir or settings.docs_dir)
+    base_dir = Path(docs_dir or settings.docs_directory)
 
     if not base_dir.exists():
         raise FileNotFoundError(f"Docs directory does not exist: {base_dir}")
@@ -33,7 +33,7 @@ def load_markdown_documents(docs_dir: str | None = None) -> list[Document]:
 
 def ingest_documents(reset: bool = True) -> int:
     if reset:
-        shutil.rmtree(settings.chroma_persist_dir, ignore_errors=True)
+        shutil.rmtree(settings.chroma_persist_directory, ignore_errors=True)
 
     documents = load_markdown_documents()
     chunks = chunk_documents(documents)
@@ -43,4 +43,4 @@ def ingest_documents(reset: bool = True) -> int:
 
 if __name__ == "__main__":
     chunk_count = ingest_documents(reset=True)
-    print(f"Ingested {chunk_count} chunks into {settings.chroma_persist_dir}")
+    print(f"Ingested {chunk_count} chunks into {settings.chroma_persist_directory}")
