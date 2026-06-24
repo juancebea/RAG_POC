@@ -1,46 +1,51 @@
 import streamlit as st
-from src.rag_pipeline import answer_question
-from src.vector_store import load_vector_store
 
-st.set_page_config(page_title="RAG Evaluation Lab", page_icon="🧪", layout="wide")
+from src.rag_pipeline import answer_question
+
+
+st.set_page_config(
+    page_title="RAG Evaluation Lab",
+    page_icon="🧪",
+    layout="wide",
+)
 
 st.title("RAG Evaluation Lab")
-st.caption("A small Q&A app with retrieval, grounded answers, and evaluation-ready outputs.")
+st.caption(
+    "Free local retrieval mode using Chroma + sentence-transformers. "
+    "No OpenAI API key required."
+)
 
-with st.sidebar:
-    st.header("Settings")
-    top_k = st.slider("Retrieved chunks", min_value=1, max_value=6, value=3)
-    st.markdown(
-        """
-        **How to use**
-        1. Ask a question about the knowledge base.
-        2. Review the generated answer.
-        3. Inspect the retrieved context and sources.
-        """
-    )
+question = st.text_input(
+    "Ask a question about the knowledge base",
+    placeholder="Example: Who are the members of Sha-Fu?",
+)
 
-question = st.text_input("Ask a question", placeholder="Example: When was Sha-Fu III released?")
+k = st.slider(
+    "Number of context chunks to retrieve",
+    min_value=1,
+    max_value=5,
+    value=3,
+)
 
 if question:
-    try:
-        vector_store = load_vector_store()
-        result = answer_question(question=question, vector_store=vector_store, k=top_k)
+    with st.spinner("Retrieving relevant context..."):
+        result = answer_question(question=question, k=k)
 
-        st.subheader("Answer")
-        st.write(result["answer"])
+    st.subheader("Answer")
+    st.write(result["answer"])
 
-        left, right = st.columns([2, 1])
+    st.subheader("Retrieved Context")
 
-        with left:
-            st.subheader("Retrieved context")
-            for index, context in enumerate(result["contexts"], start=1):
-                with st.expander(f"Context chunk {index}"):
-                    st.write(context)
+    for index, context in enumerate(result["contexts"], start=1):
+        source = result["sources"][index - 1]
 
-        with right:
-            st.subheader("Sources")
-            st.json(result["sources"])
+        source_name = source.get("source", "unknown source")
+        chunk_id = source.get("chunk_id", "unknown chunk")
 
-    except Exception as exc:
-        st.error(str(exc))
-        st.info("Run `python -m src.ingest` before starting the app.")
+        with st.expander(f"Context chunk {index} | {source_name} | chunk {chunk_id}"):
+            st.write(context)
+
+    st.subheader("Sources")
+    st.json(result["sources"])
+else:
+    st.info("Ask a question to retrieve grounded context from the local knowledge base.")
