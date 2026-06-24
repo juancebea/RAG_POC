@@ -1,0 +1,21 @@
+question,ground_truth,expected_source,type
+Who are the members of Sha-Fu?,Oni plays guitar, Xze plays bass, and Yorsh plays drums.,shafu_band_bio.md,factual
+Where is Sha-Fu from?,Sha-Fu is from Córdoba, Argentina.,shafu_band_bio.md,factual
+When was Sha-Fu formed?,Sha-Fu was formed in 2020.,shafu_band_bio.md,factual
+What style of music does Sha-Fu play?,Sha-Fu plays instrumental progressive doom metal with cinematic atmospheres.,shafu_band_bio.md,factual
+When was Sha-Fu III released?,Sha-Fu III was released on September 13, 2024.,shafu_discography.md,factual
+What theme does the album II explore?,Sha-Fu II explores dreams.,shafu_discography.md,factual
+Which tracks are on Sha-Fu III?,The tracks on Sha-Fu III are Aion, Astraeus, Gaea, Cronos, and Uranus.,shafu_discography.md,factual
+Which album explores dreams and when was it released?,Sha-Fu II explores dreams and was released on April 20, 2023.,shafu_discography.md,multi_hop
+What is the name of Sha-Fu's documentary?,Sha-Fu's documentary is called III: Detrás del Delirio.,shafu_discography.md,factual
+What mixer does Sha-Fu use live?,Sha-Fu uses a Soundcraft Ui24 mixer.,shafu_live_setup.md,factual
+What device does Sha-Fu use for backing tracks and cues?,Sha-Fu uses a B.Beat Limited Edition 128GB for backing tracks, click tracks, cues, and reference material.,shafu_live_setup.md,factual
+Can each Sha-Fu member receive a separate monitor mix?,Yes. Each band member can receive a separate monitor mix from the Soundcraft Ui24.,shafu_live_setup.md,factual
+What happened at V13RNES Fest Vol. 3?,V13RNES Fest Vol. 3 took place on December 6, 2024 at Sala Formosa with Álamo, Sveta, Ternarium, and Sha-Fu.,v13rnes_fest.md,multi_hop
+What was the theme of V13RNES Fest Vol. 3?,V13RNES Fest Vol. 3 had a doom metal and slasher-inspired theme.,v13rnes_fest.md,factual
+Can Sha-Fu communicate in English?,Yes. Sha-Fu can communicate in Spanish and English.,press_kit.md,factual
+Is Sha-Fu suitable to support international bands?,Yes. Sha-Fu is suitable for support slots with international bands that fit heavy, progressive, atmospheric, or alternative lineups.,press_kit.md,factual
+What is the next Metallica tour date?,I don't know based on the provided documents.,none,out_of_scope
+Who won the 2026 FIFA World Cup?,I don't know based on the provided documents.,none,out_of_scope
+What is Sha-Fu's vocalist name?,I don't know based on the provided documents.,none,out_of_scope
+What is the band's live setup?,Sha-Fu uses a direct live setup with Soundcraft Ui24, B.Beat, Quad Cortex, in-ear monitoring, backing tracks, click, cues, guitar, and bass routing.,shafu_live_setup.md,ambiguous

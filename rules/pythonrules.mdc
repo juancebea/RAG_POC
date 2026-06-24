@@ -1,0 +1,843 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# This rules extends the ones in [general.mdc](mdc:.cursor/rules/general.mdc) and CAN NOT override them. They are strictly for Python codebases and they should ALWAYS BE FOLLOWED.
+# Python Best Practices (Python 3.11+)
+## Core Principles
+-   **Type Safety**: Leverage Python's type hint system (`typing` module, PEP 484/526/604) to catch errors early. Use specific types over `Any`. Run a static type checker such as `mypy` or `pyright` in strict mode as part of CI.
+-   **Immutability**: Prefer immutable data structures where possible, especially for configuration and function inputs/outputs. Use `@dataclass(frozen=True)`, `NamedTuple`, `tuple`, and `frozenset` when objects shouldn't be modified after creation. Prefer returning new objects over mutating existing ones.
+-   **Modularity**: Organize code into packages and modules using standard Python imports. Keep modules focused and well-defined (SRP applies here too). Use `__init__.py` to define clean public APIs for packages.
+-   **Pragmatic Paradigm Balance**: Leverage Python's multi-paradigm nature.
+    -   **Favor Functional Patterns** (pure functions, composition, immutability) for data transformations, utility functions, pipeline steps, and stateless logic where predictability and testability are paramount.
+    -   **Use OOP Constructs** (classes, ABCs, Protocols) judiciously for structuring the application, defining clear contracts, modeling domain entities with inherent state and behavior, and implementing complex services.
+    -   **Prioritize Composition over Inheritance** even when using classes.
+    -   **Always Depend on Abstractions (ABCs/Protocols)**, not concrete implementations (DIP), regardless of whether the implementation is a class or a set of functions.
+-   **Prefer Flatter Directory Structures**: While maintaining logical organization (e.g., by feature/module or type), strive to keep directory nesting depth to a minimum. Avoid excessively deep hierarchies unless clearly justified by complexity or framework conventions. Aim for discoverability and ease of navigation.
+-   **Design for Scalability and Modularity**: Structure code into well-defined packages or modules with clear boundaries and minimal coupling. This facilitates independent development, testing, scalability, and potentially allows for future architectural evolution (e.g., towards microservices).
+### SOLID Principles (Adapted for Python)
+*(These principles apply broadly to OOP and component-based design)*
+#### Single Responsibility Principle (SRP)
+-   A class or function should have only one reason to change.
+-   Each module/class/function should focus on a single, well-defined task.
+```python
+# Bad: Class handling multiple responsibilities
+class UserService:
+    def get_user(self, user_id: str) -> User: ...
+    def save_user(self, user: User) -> None: ...
+    def send_welcome_email(self, user: User) -> None: ...
+
+# Good: Separate responsibilities
+class UserPersistence:
+    def get_user(self, user_id: str) -> User: ...
+    def save_user(self, user: User) -> None: ...
+
+class NotificationService:
+    def send_welcome_email(self, user: User) -> None: ...
+
+class UserFacade:  # Facade to coordinate
+    def __init__(
+        self,
+        persistence: UserPersistence,
+        notifications: NotificationService,
+    ) -> None:
+        self._persistence = persistence
+        self._notifications = notifications
+
+    def register_user(self, user_data: dict) -> User:
+        user = self._persistence.save_user(user_data)
+        self._notifications.send_welcome_email(user)
+        return user
+```
+#### Open/Closed Principle (OCP)
+-   Software entities should be open for extension but closed for modification.
+-   Use ABCs, Protocols, and composition to allow adding new functionality without altering existing, tested code.
+```python
+from abc import ABC, abstractmethod
+
+# Bad: Needs modification for new payment methods
+class PaymentProcessor:
+    def process_credit_card(self, details: dict) -> None: ...
+    def process_paypal(self, details: dict) -> None: ...
+    # Adding Bank Transfer requires modifying this class
+
+# Good: Open for extension
+class PaymentMethod(ABC):
+    @abstractmethod
+    def process(self, details: dict) -> None: ...
+
+class CreditCardPayment(PaymentMethod):
+    def process(self, details: dict) -> None: ...
+
+class PayPalPayment(PaymentMethod):
+    def process(self, details: dict) -> None: ...
+
+# New methods can be added without changing the core processor
+class BankTransferPayment(PaymentMethod):
+    def process(self, details: dict) -> None: ...
+
+class PaymentService:
+    def __init__(self, payment_method: PaymentMethod) -> None:
+        self._payment_method = payment_method
+
+    def charge(self, amount: float, details: dict) -> None:
+        # ... logic before processing
+        self._payment_method.process(details)
+        # ... logic after processing
+```
+#### Liskov Substitution Principle (LSP)
+-   Derived classes must be substitutable for their base classes without altering the correctness of the program.
+-   Ensure subtypes adhere to the contract defined by their base type (ABC or Protocol).
+```python
+from abc import ABC, abstractmethod
+
+# Bad: Ostrich violates the 'fly' contract if it inherits from Bird
+# class Bird(ABC):
+#     @abstractmethod
+#     def fly(self) -> None: ...
+#
+# class Ostrich(Bird):
+#     def fly(self) -> None:
+#         raise NotImplementedError("Ostriches cannot fly!")  # Violates LSP
+
+# Good: Segregate interfaces
+class FlyingBird(ABC):
+    @abstractmethod
+    def fly(self) -> None: ...
+
+class RunningBird(ABC):
+    @abstractmethod
+    def run(self) -> None: ...
+
+class Eagle(FlyingBird):
+    def fly(self) -> None:
+        print("Eagle soaring high!")
+
+class Ostrich(RunningBird):
+    def run(self) -> None:
+        print("Ostrich running fast!")
+
+def make_bird_fly(bird: FlyingBird) -> None:
+    bird.fly()
+```
+#### Interface Segregation Principle (ISP)
+-   Clients should not be forced to depend on methods they do not use.
+-   Create smaller, specific ABCs or Protocols rather than large, monolithic ones.
+```python
+from typing import Protocol
+
+# Bad: Monolithic interface forces unrelated methods
+class Worker(Protocol):
+    def work(self) -> None: ...
+    def eat(self) -> None: ...
+    def code(self) -> None: ...
+    def debug(self) -> None: ...
+
+# Good: Segregated interfaces
+class Workable(Protocol):
+    def work(self) -> None: ...
+
+class Eatable(Protocol):
+    def eat(self) -> None: ...
+
+class Programmable(Protocol):
+    def code(self) -> None: ...
+    def debug(self) -> None: ...
+
+class SoftwareDeveloper:
+    """Satisfies Workable, Eatable, and Programmable."""
+    def work(self) -> None: ...
+    def eat(self) -> None: ...
+    def code(self) -> None: ...
+    def debug(self) -> None: ...
+
+class Manager:
+    """Satisfies Workable and Eatable only."""
+    def work(self) -> None: ...
+    def eat(self) -> None: ...
+    # Does not need code() or debug()
+```
+#### Dependency Inversion Principle (DIP)
+-   High-level modules should not depend on low-level modules. Both should depend on abstractions (ABCs or Protocols).
+-   Abstractions should not depend on details. Details (concrete implementations) should depend on abstractions.
+-   Use constructor injection to achieve this.
+```python
+from abc import ABC, abstractmethod
+
+# Bad: High-level depends directly on low-level concrete class
+from concrete_logger import ConcreteLogger
+
+class DataProcessor:
+    def __init__(self) -> None:
+        self._logger = ConcreteLogger()  # Direct dependency
+
+    def process(self, data: dict) -> None:
+        self._logger.log("Processing data...")
+        # ... processing logic
+
+# Good: Depend on abstraction (ABC or Protocol)
+class Logger(ABC):
+    @abstractmethod
+    def log(self, message: str) -> None: ...
+
+class ConsoleLogger(Logger):
+    def log(self, message: str) -> None:
+        print(message)
+
+class FileLogger(Logger):
+    def log(self, message: str) -> None:
+        ...  # write to file
+
+# High-level module depends on the abstraction via constructor injection
+class DataProcessor:
+    def __init__(self, logger: Logger) -> None:
+        self._logger = logger  # Injected dependency
+
+    def process(self, data: dict) -> None:
+        self._logger.log("Processing data...")
+        # ... processing logic
+
+# Usage:
+console_logger = ConsoleLogger()
+processor = DataProcessor(console_logger)
+processor.process({"id": 1})
+```
+## Specific Python Practices
+### Avoid Magic Numbers/Strings
+-   **Problem**: Using unnamed numeric or string literals makes code hard to understand and maintain.
+-   **Solution**: Define constants (module-level `UPPER_SNAKE_CASE` variables), `Enum` classes, or configuration dataclasses for these values.
+```python
+from enum import Enum, auto
+
+# Bad
+if user.role == 1:  # What does 1 mean?
+    ...  # admin logic
+TAX_RATE = 0.21  # Magic number
+
+# Good
+class UserRole(Enum):
+    GUEST = auto()
+    ADMIN = auto()
+    EDITOR = auto()
+
+COMPANY_TAX_RATE = 0.21
+
+if user.role == UserRole.ADMIN:
+    ...  # admin logic
+
+def calculate_vat(price: float) -> float:
+    return price * COMPANY_TAX_RATE
+```
+### Services Must Have Abstractions
+-   **Problem**: Tightly coupling components to concrete service implementations makes testing difficult and reduces flexibility.
+-   **Solution**: Define an ABC or `Protocol` for each service contract. Implementations should satisfy the abstraction. Depend on the abstraction, not the concrete class (follows DIP).
+```python
+from abc import ABC, abstractmethod
+
+# Bad: Direct dependency on implementation
+from product_service import ProductService
+
+class ProductController:
+    def __init__(self, product_service: ProductService) -> None:
+        self._product_service = product_service  # Depends on concrete class
+
+    def get_product(self, product_id: str) -> Product | None:
+        return self._product_service.fetch_product_by_id(product_id)
+
+# Good: Depend on abstraction
+class IProductService(ABC):
+    """Define the contract."""
+    @abstractmethod
+    async def fetch_product_by_id(self, product_id: str) -> Product | None: ...
+    @abstractmethod
+    async def save_product(self, product: Product) -> None: ...
+
+class ProductService(IProductService):
+    """Implement the contract."""
+    async def fetch_product_by_id(self, product_id: str) -> Product | None: ...
+    async def save_product(self, product: Product) -> None: ...
+
+class ProductController:
+    def __init__(self, product_service: IProductService) -> None:
+        self._product_service = product_service  # Depends on abstraction
+
+    async def get_product(self, product_id: str) -> Product | None:
+        # Now we can easily mock IProductService for testing
+        return await self._product_service.fetch_product_by_id(product_id)
+```
+### Use Proper Package Imports, Avoid Deep Relative Paths
+-   **Problem**: Deep relative imports (`from ....utils.helpers import something`) are fragile and hard to read. Absolute file system paths (`/home/user/project/src/...`) should never appear in imports.
+-   **Solution**: Install the project as a package (via `pyproject.toml`) so all imports can be absolute from the package root. Use `src` layout when appropriate.
+**`pyproject.toml` example:**
+```toml
+[project]
+name = "my-project"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+```
+**Usage:**
+```python
+# Bad (deep relative)
+from ....shared.utils.helpers import utility_function
+
+# Bad (absolute path — DO NOT USE)
+# import importlib; importlib.import_module("/home/user/projects/my_app/src/services/some_service")
+
+# Good (absolute package import)
+from src.utils.helpers import utility_function
+from src.services.api_service import ApiService
+```
+## Standard Directory Structure
+A common and recommended structure for Python projects, differentiating unit test colocation from other test types:
+```
+my-project/
+├── src/                      # Source code root (package)
+│   ├── __init__.py           # Package marker
+│   ├── main.py               # Main application entry point
+│   ├── config.py             # Centralized configuration
+│   ├── modules/              # Feature modules
+│   │   ├── __init__.py
+│   │   └── users/
+│   │       ├── __init__.py
+│   │       ├── controller.py
+│   │       ├── service.py
+│   │       └── ...
+│   ├── services/             # Shared/Core services
+│   │   ├── __init__.py
+│   │   └── auth_service.py
+│   └── shared/               # Shared utilities
+│       ├── __init__.py
+│       └── utils/
+│           ├── __init__.py
+│           └── helpers.py
+├── tests/                    # Root directory for ALL tests
+│   ├── conftest.py           # Shared pytest fixtures
+│   ├── unit/                 # Unit tests (mirror src/ structure)
+│   │   ├── test_helpers.py
+│   │   ├── test_auth_service.py
+│   │   └── ...
+│   ├── integration/          # Integration tests
+│   │   └── test_user_auth.py
+│   └── e2e/                  # End-to-end tests
+│       └── test_login_flow.py
+├── docs/                     # Documentation
+├── .env                      # Environment variables (must be in .gitignore)
+├── .env.example              # Template for env vars (committed to repo)
+├── .gitignore                # Git ignore patterns
+├── pyproject.toml            # Project metadata, dependencies, tool config
+├── requirements.txt          # Pinned dependencies (or use pyproject.toml)
+└── README.md                 # Project documentation
+```
+**Notes on Test File Location:**
+-   **Unit Tests**: Place unit test files (`test_*.py`) in a `tests/unit/` directory mirroring the source structure, or directly in `tests/` for smaller projects.
+-   **Integration, End-to-End (E2E), and other complex tests**: Place these tests in dedicated subdirectories under `tests/` (e.g., `tests/integration/`, `tests/e2e/`).
+-   **Shared Fixtures**: Use `conftest.py` files at the appropriate directory level to share fixtures across tests. pytest discovers `conftest.py` files automatically.
+-   Maintain consistency within each test type.
+-   This overall structure is a general guideline. Adapt it based on the project size, framework, and team conventions.
+## Unit Testing Best Practices (pytest)
+Unit tests verify the smallest parts of your application (functions, classes, modules) in isolation. pytest is the standard Python testing framework.
+### Naming and Organization
+-   **File Naming**: Use `test_*.py` (e.g., `test_user_service.py`).
+-   **Test Placement**: Place test files in a `tests/` directory (or colocate for small projects). Use `conftest.py` for shared fixtures.
+-   **Descriptive Names**: Use descriptive function names starting with `test_` that state what is being tested and the expected outcome. Use classes to group related tests.
+```python
+# Example: tests/test_calculator.py
+from src.utils.calculator import add, subtract
+
+class TestAdd:
+    def test_returns_sum_of_two_positive_numbers(self) -> None:
+        assert add(2, 3) == 5
+
+    def test_returns_sum_when_one_number_is_negative(self) -> None:
+        assert add(5, -2) == 3
+
+    def test_returns_same_number_when_adding_zero(self) -> None:
+        assert add(7, 0) == 7
+
+class TestSubtract:
+    # ... tests for subtract
+    ...
+```
+### Test Structure (AAA Pattern)
+-   **Arrange**: Set up the preconditions for the test (initialize variables, create mocks/fakes, instantiate classes).
+-   **Act**: Execute the code being tested.
+-   **Assert**: Verify that the outcome is as expected using `assert` statements.
+```python
+def test_calculates_total_price_including_tax() -> None:
+    # Arrange
+    base_price = 100.0
+    tax_rate = 0.1
+
+    def calculate_total_price(price: float, rate: float) -> float:
+        return price * (1 + rate)
+
+    # Act
+    total_price = calculate_total_price(base_price, tax_rate)
+
+    # Assert
+    assert total_price == 110.0
+```
+### Isolation and Mocking
+-   **Isolate Units**: Unit tests should not depend on external systems (APIs, databases, file system) or other units. Use mocks, stubs, fakes, or dependency injection to replace dependencies.
+-   **pytest Fixtures**: Use `@pytest.fixture` to create reusable test setup. Use `conftest.py` to share fixtures across test modules.
+-   **unittest.mock**: Use `unittest.mock.patch`, `MagicMock`, and `Mock` for mocking. Prefer patching at the point of import, not at the source.
+-   **Fake Implementations**: For complex dependencies, create lightweight fake implementations that satisfy the abstraction (ABC/Protocol) without side effects.
+```python
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from src.services.user_service import UserService
+from src.models import User
+
+class TestUserService:
+    @pytest.fixture
+    def mock_api_client(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def user_service(self, mock_api_client: AsyncMock) -> UserService:
+        return UserService(api_client=mock_api_client)
+
+    async def test_fetches_user_data_by_id(
+        self,
+        user_service: UserService,
+        mock_api_client: AsyncMock,
+    ) -> None:
+        # Arrange
+        mock_user = User(id="123", name="Test User")
+        mock_api_client.fetch_user.return_value = mock_user
+
+        # Act
+        user = await user_service.get_user_by_id("123")
+
+        # Assert
+        assert user == mock_user
+        mock_api_client.fetch_user.assert_called_once_with("123")
+
+    async def test_raises_on_api_error(
+        self,
+        user_service: UserService,
+        mock_api_client: AsyncMock,
+    ) -> None:
+        # Arrange
+        mock_api_client.fetch_user.side_effect = RuntimeError("API Error")
+
+        # Act & Assert
+        with pytest.raises(RuntimeError, match="API Error"):
+            await user_service.get_user_by_id("404")
+        mock_api_client.fetch_user.assert_called_once_with("404")
+```
+### Assertions
+-   **Use Plain `assert`**: pytest rewrites `assert` statements to provide rich failure messages. No need for special assertion methods.
+-   **Use `pytest.raises`**: For testing exceptions.
+-   **Use `pytest.approx`**: For floating-point comparisons.
+-   **Test One Thing**: Ideally, each test function should test a single logical assertion or behavior.
+-   **Avoid Logic in Tests**: Tests should be simple and direct, without complex conditional logic.
+### Asynchronous Code
+-   **Use `pytest-asyncio`**: Mark async test functions with `@pytest.mark.asyncio` or configure `asyncio_mode = "auto"` in `pyproject.toml`.
+-   **Use `AsyncMock`**: From `unittest.mock` for mocking async functions.
+```python
+import pytest
+
+@pytest.mark.asyncio
+async def test_resolves_with_user_data() -> None:
+    mock_fetch = AsyncMock(return_value={"id": "1", "name": "Async User"})
+    result = await mock_fetch()
+    assert result == {"id": "1", "name": "Async User"}
+
+@pytest.mark.asyncio
+async def test_raises_on_network_failure() -> None:
+    mock_fetch = AsyncMock(side_effect=ConnectionError("Network Failure"))
+    with pytest.raises(ConnectionError, match="Network Failure"):
+        await mock_fetch()
+```
+### Setup and Teardown
+-   **`@pytest.fixture`**: Use fixtures for setup logic. Control scope with `scope="function"` (default), `scope="class"`, `scope="module"`, or `scope="session"`.
+-   **`yield` fixtures**: Use `yield` in fixtures for setup *and* teardown logic. Code after `yield` runs as cleanup.
+-   **`autouse=True`**: Use sparingly for fixtures that should run for every test in scope (e.g., resetting state).
+-   **Clean Up**: Ensure tests clean up after themselves (e.g., reset mocks, undo patches) to avoid interference between tests. `yield` fixtures and `monkeypatch` handle this automatically.
+### Other Considerations
+-   **Readability**: Write tests that are easy to understand. Clear descriptions and structure are key.
+-   **Maintainability**: Avoid testing implementation details. Focus on testing the public API or behavior of the unit. This makes tests less brittle to refactoring.
+-   **Test Coverage**: Aim for reasonable code coverage using `pytest-cov`, but focus on testing critical paths and edge cases, not just achieving a high percentage.
+-   **Speed**: Unit tests should be fast. Avoid real network calls, file system access, or long delays.
+-   **Consider Test-Driven Development (TDD):** Where appropriate, practice TDD by writing tests *before* the implementation code. This can help drive design decisions, ensure testability from the start, and guarantee coverage for the implemented logic.
+## Data Handling and Serialization Conventions
+### Use `snake_case` for JSON Keys
+-   **Standard:** When serializing data *to* JSON (e.g., sending to an API) or deserializing data *from* JSON (e.g., receiving from an API), keys **must** use `snake_case`.
+-   **Rationale:** This is a widespread standard for APIs globally, ensuring consistency and interoperability. Python natively uses `snake_case` for variable and attribute names, so this convention aligns naturally.
+-   **Handling Mismatches:** When interacting with APIs that use `camelCase` keys:
+    -   **Pydantic Models:** Use `model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)` for automatic conversion.
+    -   **Manual Mapping:** Explicitly map keys during serialization/deserialization.
+    -   **API Client Layer:** This transformation logic should ideally reside within the API client or data access layer, keeping the core application logic clean.
+```python
+from dataclasses import dataclass, asdict
+import json
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
+
+# Example: Received JSON from API (camelCase from external API)
+received_json = '{ "userId": 123, "firstName": "Jane", "isActive": true }'
+
+# --- Approach 1: Pydantic with alias generation ---
+class User(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+    user_id: int
+    first_name: str
+    is_active: bool
+
+user = User.model_validate_json(received_json)
+print(user.first_name)  # "Jane" — access with snake_case
+
+# Serialize back to camelCase JSON for API
+print(user.model_dump_json(by_alias=True))
+# {"userId":123,"firstName":"Jane","isActive":true}
+
+# --- Approach 2: Manual mapping with dataclasses ---
+@dataclass(frozen=True)
+class UserDC:
+    user_id: int
+    first_name: str
+    is_active: bool
+
+parsed = json.loads(received_json)
+user_dc = UserDC(
+    user_id=parsed["userId"],
+    first_name=parsed["firstName"],
+    is_active=parsed["isActive"],
+)
+```
+## HTTP Communication (APIs)
+### Use `httpx` for REST API Calls
+-   **Standard Library:** The `httpx` library **must** be used for making HTTP requests to RESTful APIs.
+-   **Rationale:** `httpx` provides both sync and async APIs, HTTP/2 support, a clean `requests`-like interface, timeout handling, and connection pooling. It is the modern successor to `requests` for new projects.
+-   **Instantiation:** Create configured `httpx.Client` or `httpx.AsyncClient` instances for different API endpoints or configurations (e.g., setting `base_url`, default headers, timeouts).
+```python
+import httpx
+
+# Example: Creating a configured client
+client = httpx.Client(
+    base_url="https://api.example.com/v1",
+    timeout=10.0,  # 10 seconds
+    headers={"Content-Type": "application/json"},
+)
+
+# Example: Making a GET request
+def fetch_user_data(user_id: str) -> dict:
+    try:
+        response = client.get(f"/users/{user_id}")
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as exc:
+        print(f"HTTP error fetching user: {exc.response.status_code} {exc.response.text}")
+        raise
+    except httpx.RequestError as exc:
+        print(f"Request error: {exc}")
+        raise
+
+# Example: Async client
+async def fetch_user_data_async(user_id: str) -> dict:
+    async with httpx.AsyncClient(
+        base_url="https://api.example.com/v1",
+        timeout=10.0,
+    ) as client:
+        response = await client.get(f"/users/{user_id}")
+        response.raise_for_status()
+        return response.json()
+```
+### Use `httpx` Event Hooks for Cross-Cutting Concerns
+-   **Middleware Logic:** Logic that needs to run for *every* request or response (or a large subset) **must** be implemented using `httpx` event hooks or custom `httpx.Auth` / transport classes.
+-   **Examples:**
+    -   Adding authentication tokens (e.g., JWT Bearer tokens) to request headers.
+    -   Logging request/response details.
+    -   Modifying request data (e.g., consistently applying key transformations).
+    -   Global error handling (e.g., redirecting on 401 Unauthorized, logging 5xx errors).
+-   **Rationale:** Event hooks and custom auth classes centralize this logic, keeping individual API call functions clean and focused on their specific task. They prevent code duplication and ensure consistency.
+```python
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+def log_request(request: httpx.Request) -> None:
+    logger.info(f"Request: {request.method} {request.url}")
+
+def log_response(response: httpx.Response) -> None:
+    logger.info(f"Response: {response.status_code} {response.url}")
+
+# --- Auth class for token injection ---
+class BearerAuth(httpx.Auth):
+    def __init__(self, token_provider: callable) -> None:
+        self._token_provider = token_provider
+
+    def auth_flow(self, request: httpx.Request):
+        token = self._token_provider()
+        if token:
+            request.headers["Authorization"] = f"Bearer {token}"
+        yield request
+
+# --- Client with hooks and auth ---
+def get_auth_token() -> str | None:
+    ...  # Retrieve token from storage
+
+api_client = httpx.Client(
+    base_url="https://api.example.com/v1",
+    auth=BearerAuth(get_auth_token),
+    event_hooks={
+        "request": [log_request],
+        "response": [log_response],
+    },
+    timeout=10.0,
+)
+
+# Now, any call using api_client will automatically use these hooks and auth.
+```
+## Environment Configuration
+Handling configuration across different environments (local development, staging, production) is crucial for consistency and security.
+### Environment Variable Files (`.env`)
+-   **Standard:** Use `.env` files to manage environment-specific variables. The `python-dotenv` library provides support for loading these files.
+-   **File Naming Convention:**
+    -   `.env`: **For local overrides ONLY.** This file **must** be added to `.gitignore` and should **never** be committed to version control. Developers use this file to override variables for their specific local setup.
+    -   `.env.example`: Template showing all required variables with placeholder values. This file **is** committed. Collaborators copy it to `.env` and fill in real values.
+    -   `.env.development`: Contains variables specific to the `development` environment. This file **is** committed.
+    -   `.env.staging`: Contains variables specific to the `staging` environment. This file **is** committed.
+    -   `.env.production`: Contains variables specific to the `production` environment. This file **is generally NOT committed** for security reasons; variables are typically injected via CI/CD or platform environment variables during the build/deployment process.
+-   **Loading Priority:** `python-dotenv` loads the `.env` file and **does not override** existing environment variables by default. For layered configuration, load files explicitly in priority order:
+    ```python
+    from dotenv import load_dotenv
+    load_dotenv(".env.development")  # Base config
+    load_dotenv(".env", override=True)  # Local overrides take priority
+    ```
+### Local Development Environment
+-   **Default Target:** By default, local development should connect to the **`staging`** environment.
+-   **Achieving Default:** Load `.env.staging` (or `.env.development`) as the base configuration.
+-   **Local Override:** Developers **must** be able to override any variable locally by adding it to their **local, uncommitted `.env` file**.
+### Configuration Access
+-   **Standard:** Access to environment variables **must** be centralized through a dedicated configuration module (e.g., `src/config.py`). Direct access to `os.getenv()` or `os.environ` throughout the codebase is **forbidden**.
+-   **Rationale:**
+    -   **Centralization:** Provides a single source of truth for all configuration values.
+    -   **Type Safety:** Allows defining clear Python types for configuration variables, with parsing and defaults in one place.
+    -   **Validation:** Facilitates adding validation logic (e.g., checking for required variables, parsing numbers/booleans) during application startup.
+    -   **Abstraction:** Decouples the application from the specific mechanism used to load environment variables.
+    -   **Testability:** Makes it easier to mock configuration during testing.
+-   **Implementation:**
+    -   Create a configuration file (e.g., `src/config.py`).
+    -   Inside this file, read the raw environment variables (e.g., from `os.getenv()`).
+    -   Perform necessary validation (e.g., check if required variables exist).
+    -   Parse/transform values if needed (e.g., string to int/bool).
+    -   Export the processed and typed configuration as an immutable object.
+-   **Advanced Validation:** For enhanced robustness, consider using **Pydantic `BaseSettings`** within the configuration module to define and enforce the expected shape and types of your environment variables automatically.
+```python
+# Example: src/config.py
+from dataclasses import dataclass
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def _get_required_env(key: str) -> str:
+    """Get and validate a required environment variable."""
+    value = os.getenv(key)
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {key}")
+    return value
+
+@dataclass(frozen=True)
+class AppConfig:
+    api_url: str = _get_required_env("API_URL")
+    api_timeout_seconds: int = int(os.getenv("API_TIMEOUT_SECONDS", "10"))
+    environment: str = os.getenv("ENVIRONMENT", "development")
+    enable_analytics: bool = os.getenv("ENABLE_ANALYTICS", "false").lower() == "true"
+    openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
+
+config = AppConfig()
+
+# --- Usage Example in another file ---
+# from src.config import config
+#
+# client = httpx.Client(
+#     base_url=config.api_url,
+#     timeout=config.api_timeout_seconds,
+# )
+#
+# if config.environment != "production" and config.enable_analytics:
+#     print("Analytics enabled in non-production environment.")
+```
+### Configuration Layering
+-   `.env.development` provides the base configuration.
+-   `.env.staging` **overrides or adds** variables needed specifically for staging.
+-   Production configuration (`.env.production` or CI/CD variables) **overrides or adds** variables needed specifically for production.
+-   Local `.env` file overrides **any** variable from the loaded environment-specific file for local development needs.
+---
+*This document provides a starting point for Python best practices. It should be expanded and refined based on specific project needs and team agreements.*
+### Prefer Standard Library and Established Utilities Over Custom Implementations
+```python
+from collections import defaultdict
+from functools import reduce
+from itertools import chain, groupby
+from operator import itemgetter
+
+# Example: Safe nested dictionary access (use dict.get or third-party like glom)
+user = {"profile": {"address": {"street": "123 Main St"}}}
+street = user.get("profile", {}).get("address", {}).get("street", "N/A")
+# Returns "123 Main St"
+zip_code = user.get("profile", {}).get("address", {}).get("zip", "N/A")
+# Returns "N/A" (safe default)
+
+# Example: Checking if empty
+items: list = []
+if not items:
+    print("List is empty.")
+
+# Example: Debouncing — not built-in, but for CLI/backend, use functools.lru_cache
+# or for async contexts, use asyncio utilities. For UI contexts, the framework
+# typically provides its own debounce mechanism.
+
+# Example: Grouping data
+from itertools import groupby
+from operator import itemgetter
+
+records = [
+    {"dept": "eng", "name": "Alice"},
+    {"dept": "eng", "name": "Bob"},
+    {"dept": "sales", "name": "Carol"},
+]
+sorted_records = sorted(records, key=itemgetter("dept"))
+for dept, members in groupby(sorted_records, key=itemgetter("dept")):
+    print(f"{dept}: {[m['name'] for m in members]}")
+```
+### Leverage Python's `typing` Module
+-   **Standard:** Utilize Python's built-in typing constructs to perform common type annotations concisely and safely. Avoid recreating these manually.
+-   **Rationale:** They improve code readability, reduce ambiguity, and enable static analysis tools to catch errors before runtime.
+-   **Common Examples:**
+    -   `Optional[T]` or `T | None`: Value that may be `None`.
+    -   `Union[A, B]` or `A | B`: Value that can be one of several types.
+    -   `TypeVar`: Define generic type variables for generic functions and classes.
+    -   `Protocol`: Structural subtyping (duck typing with type safety).
+    -   `TypedDict`: Typed dictionaries with specific key/value types.
+    -   `Literal["a", "b"]`: Restrict values to specific literals.
+    -   `Final`: Mark a variable as non-reassignable.
+    -   `ClassVar`: Declare class-level variables in dataclasses.
+    -   `Annotated[T, metadata]`: Attach metadata to types (used by Pydantic, FastAPI, etc.).
+    -   `TypeAlias`: Explicit type alias declarations.
+```python
+from typing import TypeVar, Protocol, TypedDict, Literal, Final
+
+# Example: TypedDict for structured dictionaries
+class UserPayload(TypedDict, total=False):
+    name: str
+    email: str
+    role: Literal["admin", "user"]
+
+def update_user(user_id: int, payload: UserPayload) -> None: ...
+update_user(1, {"email": "new@example.com"})
+
+# Example: Protocol for structural typing
+class Readable(Protocol):
+    def read(self) -> str: ...
+
+def process_input(source: Readable) -> str:
+    return source.read().upper()
+
+# Example: Final for constants
+MAX_RETRIES: Final = 3
+
+# Example: TypeVar for generics
+T = TypeVar("T")
+
+def first_or_default(items: list[T], default: T) -> T:
+    return items[0] if items else default
+```
+### Use `Enum` and `Literal` for Fixed Value Sets
+-   **Standard:** For defining sets of fixed, named values, use `enum.Enum` (or its subclasses `StrEnum`, `IntEnum`) or `typing.Literal`.
+-   **Rationale:**
+    -   **Enum:** Provides named constants with type safety, iteration, and comparison. Use for values that have behavior or need to be iterated/displayed.
+    -   **Literal:** Provides inline literal type narrowing without runtime overhead. Use for constraining function parameters or TypedDict fields.
+-   **When to use which:**
+    -   Use `Enum` when you need runtime enumeration, display names, or attached behavior.
+    -   Use `Literal` when you only need type-level checking for a small set of string/int values.
+```python
+from enum import Enum, StrEnum, auto
+from typing import Literal
+
+# Using Enum for named constants with behavior
+class Status(StrEnum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+def handle_status(status: Status) -> None:
+    if status == Status.PENDING:
+        ...
+
+handle_status(Status.COMPLETED)
+
+# Using Literal for simple parameter constraints
+def set_log_level(level: Literal["debug", "info", "warning", "error"]) -> None:
+    ...
+
+set_log_level("info")
+# set_log_level("other")  # Type error
+
+# Traditional Enum with auto()
+class UserRole(Enum):
+    GUEST = auto()
+    ADMIN = auto()
+    EDITOR = auto()
+```
+### Avoid Bare `except` and Overly Broad Exception Handling
+-   **Standard:** Avoid bare `except:` and `except Exception:` when more specific handling is possible.
+-   **Rationale:** Bare `except` catches *everything*, including `KeyboardInterrupt` and `SystemExit`, masking bugs and making debugging extremely difficult. Even `except Exception` is too broad in most cases.
+-   **Alternatives (Prefer These):**
+    -   **Catch specific exceptions:** Handle only the exceptions you expect and know how to recover from.
+    -   **Let unexpected exceptions propagate:** Don't catch what you can't handle meaningfully.
+    -   **Use `else` and `finally`:** For code that should run only on success or always, respectively.
+    -   **Custom exceptions:** Define application-specific exception hierarchies for clear error handling.
+```python
+import httpx
+
+def get_element_text(element_id: str) -> str | None:
+    elements: dict[str, str] = {}
+
+    # Bad: Bare except swallows everything
+    # try:
+    #     return elements[element_id]
+    # except:
+    #     return None
+
+    # Good: Specific exception handling
+    try:
+        return elements[element_id]
+    except KeyError:
+        return None
+
+def fetch_data(url: str) -> dict:
+    # Bad: Overly broad
+    # try:
+    #     response = httpx.get(url)
+    #     return response.json()
+    # except Exception:
+    #     return {}
+
+    # Good: Specific handling with appropriate recovery
+    try:
+        response = httpx.get(url, timeout=5.0)
+        response.raise_for_status()
+        return response.json()
+    except httpx.TimeoutException:
+        print(f"Timeout fetching {url}")
+        raise
+    except httpx.HTTPStatusError as exc:
+        print(f"HTTP {exc.response.status_code} from {url}")
+        raise
+```
